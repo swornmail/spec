@@ -42,3 +42,6 @@ Apache-2.0, which carries its own patent license grant.
 Repository content is Apache-2.0 (see `LICENSE`). Upon IETF datatracker
 submission the draft text will additionally be subject to the standard
 IETF Trust provisions (BCP 78/79).
+
+Maintained by [PlatOps Security, LLC](https://platops.com). Copyright:
+see `NOTICE`.
