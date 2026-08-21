@@ -1,6 +1,6 @@
 # SwornMail Threat Model
 
-Companion to `draft-swornmail-protocol-00`. Technical scope only; published
+Companion to `draft-kafedzhy-swornmail-01`. Technical scope only; published
 so implementers and reviewers can check our assumptions rather than trust
 our claims.
 
@@ -24,7 +24,11 @@ compromised log operators; abusive attestors (protocol-compliant attackers).
    Key theft alone is non-exploitable off-prefix (contrast DKIM).
 3. **Replay indifference** (Mode 2): tokens expire ≤24h and replay is only
    possible from inside the same prefix = same reputation unit; verifiers
-   need no anti-replay state.
+   need no anti-replay state. Holds for `role=mta`. For `role=esp-tenant`,
+   where one prefix is shared among tenants, it holds only at the
+   granularity of the attested prefix — token possession is not tenant
+   authentication, and per-tenant accountability requires a dedicated
+   prefix (e.g. /64) per tenant.
 
 ## Analyzed attacks & outcomes
 
@@ -36,6 +40,12 @@ compromised log operators; abusive attestors (protocol-compliant attackers).
 | EHLO keyword stripping | Downgrade-to-baseline only (invariant 1); attest within STARTTLS; Mode 1 unstrippable |
 | `_sworn` record spoofing (no DNSSEC) | Verification DoS at worst (fail-to-neutral); substituted keys still fail invariant 2. DNSSEC recommended |
 | Log flooding / equivocation / recon | Submission requires DNS proof of control; CT-style signed tree heads + gossip + independent monitors; publication at /48 coarseness limits topology disclosure (comparable data already public via SPF/rDNS) |
+| Attestation squatting (attesting space one doesn't control) | No reputation benefit by construction: feeds MUST bind reputation only to traffic-corroborated attestations; logs SHOULD require/record proof of prefix control (reverse-tree challenge or ROA correspondence) and flag uncorroborated claims |
+| Overlapping attestations (provider /48 vs tenant /56) | Longest-prefix precedence for reputation keying; cross-domain overlap legitimate but surfaced by log monitors. Declared unit is capped 1–64 and verifiers MUST clamp a larger policy-record `u=` to 64 |
+| Mode-1 reputation laundering by a delegated tenant | A provider enumerating a broad prefix accepts accountability for every address within it, including reverse-DNS-delegated sub-allocations. Mitigation: operators delegating reverse DNS SHOULD enumerate only sub-prefixes they operate, or use Mode 2 (per-prefix signed consent). Mode 1 is experimental and SHOULD be weighted low |
+| Verifier as DNS oracle (attacker tokens naming arbitrary domains) | Cheap-checks-first ordering (time + membership before key fetch), negative caching, per-domain rate limits on key fetches |
+| Spoofed inbound `sworn=` Authentication-Results | Border MTAs MUST strip/rename AR fields claiming their own authserv-id (RFC 8601 §5) — standard AR trust-boundary rule, restated because reputation feeds consume these headers |
+| Signature cross-protocol confusion | Keys are protocol-dedicated; COSE protected content-type `application/sworn-token+cbor` is signed, domain-separating tokens from any other COSE use of the key |
 
 ## Residual risks (documented, accepted for v1)
 

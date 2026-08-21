@@ -9,18 +9,20 @@ treatment unchanged.
 
 | File | Contents |
 |---|---|
-| `draft-kafedzhy-swornmail-00.md` | Internet-Draft source (kramdown-rfc) |
+| `draft-kafedzhy-swornmail-01.md` | Internet-Draft source, current revision (kramdown-rfc) |
+| `draft-kafedzhy-swornmail-00.md` | Previous revision, kept for history |
 | `threat-model.md` | Assets, adversaries, analyzed attacks, residual risks |
-| `test-vectors/v0.json` | Deterministic vectors: keys, record, six verification cases with complete tokens |
+| `test-vectors/v1.json` | Deterministic vectors for the -01 wire format: keys, record, verification cases with complete tokens (`v0.json` retained for history) |
 | `SECURITY.md` | Vulnerability reporting (security@swornmail.dev) |
 
 ## Status
 
-`-00`, pre-submission. **The wire format is not yet frozen** — breaking
-changes are expected before v1. Known open items for `-01` are tracked in
+`-01`, pre-submission. Wire format v1 (COSE `kid` + content-type,
+selector-in-QNAME records) is intended to be stable through the 0.x
+implementations; remaining pre-v1 breaking changes will be called out in
 the issues.
 
-Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-00.md`
+Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Implementations verifying against the shared vectors:
 [swornmail-go](https://github.com/swornmail/swornmail-go) (Go) ·
