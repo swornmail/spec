@@ -32,6 +32,18 @@ and is **not** what the datatracker `-00` will contain.
 
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
+Build the submission artifact (v3 XML, IETF-stream numbering):
+
+```sh
+mkdir -p submission
+sed 's/^docname: draft-kafedzhy-swornmail-01$/docname: draft-kafedzhy-swornmail-00/' \
+  draft-kafedzhy-swornmail-01.md |
+  kramdown-rfc > submission/draft-kafedzhy-swornmail-00.xml
+```
+
+Rebuild it on the day you submit — the toolchain stamps the build date into
+the document.
+
 Implementations verifying against the shared vectors:
 [swornmail-go](https://github.com/swornmail/swornmail-go) (Go) ·
 [swornmail](https://github.com/swornmail/swornmail) (Rust, early).
