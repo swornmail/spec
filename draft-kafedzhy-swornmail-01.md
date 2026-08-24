@@ -705,4 +705,4 @@ to the future draft that registers a post-quantum algorithm ({{pq}}).
 
 Prior art that informed this design: CSV/CSA, VBR {{RFC5518}}, DANE
 {{RFC6698}} {{RFC7672}}, ARC {{RFC8617}}, DMARC {{RFC7489}}, and the
-RPKI. The -01 revision incorporates an adversarial design review.
+RPKI. This document incorporates an adversarial design review.
