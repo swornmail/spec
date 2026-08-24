@@ -22,6 +22,14 @@ selector-in-QNAME records) is intended to be stable through the 0.x
 implementations; remaining pre-v1 breaking changes will be called out in
 the issues.
 
+**Repo revisions vs IETF revisions.** The datatracker requires a first
+submission to be version `-00`, so `draft-kafedzhy-swornmail-01.md` here is
+submitted there as `draft-kafedzhy-swornmail-00`. The two numbering schemes
+are independent: "the `-01` wire format", as named throughout the
+implementations and `test-vectors/v1.json`, always means this repository's
+`-01`. The `-00` file in this repo is the earlier, pre-freeze wire format
+and is **not** what the datatracker `-00` will contain.
+
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Implementations verifying against the shared vectors:

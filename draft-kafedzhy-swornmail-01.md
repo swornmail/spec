@@ -2,17 +2,21 @@
 ###
 # SwornMail Protocol — Internet-Draft source (kramdown-rfc format)
 # Build: kdrfc draft-kafedzhy-swornmail-01.md  (gem install kramdown-rfc)
-# TODO before datatracker submission: full ABNF for records and the SWORN
-# command; aggregate-report JSON schema appendix; confirm author email once
-# sworn.email mailbox is live.
+# Datatracker submission: a first submission must be version -00, so build
+# the submission artifact with docname draft-kafedzhy-swornmail-00. That is
+# IETF-stream numbering; it does not renumber the -01 wire format, which is
+# frozen and named as such in both implementations and the v1 vectors.
+# Before submitting: the author email must be a live mailbox. The two
+# remaining TODOs below (full ABNF, aggregate-report JSON schema) are
+# ordinary work-items for an individual -00 and do not block submission.
 ###
 title: "SwornMail: Cryptographic IPv6 Prefix Attestation for SMTP"
 abbrev: SwornMail
 docname: draft-kafedzhy-swornmail-01
 category: exp
 ipr: trust200902
+submissiontype: IETF
 area: Applications
-workgroup: Independent Submission
 keyword: [SMTP, IPv6, reputation, attestation, email]
 stand_alone: yes
 pi: [toc, sortrefs, symrefs]
