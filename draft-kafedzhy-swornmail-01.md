@@ -182,19 +182,39 @@ _prefixes._sworn.mailer.example.com. IN TXT
 ~~~
 
 Tags: `v` (REQUIRED, first); `p` (comma-separated attested prefixes,
-each meeting {{canon}}); `u` (reputation unit, default 64; MUST be
-1–64 — a value outside that range makes the record malformed, so the
-publishing operator sees the error rather than having it silently
-adjusted); `t` (OPTIONAL flags, {{testing}}); `rua` (OPTIONAL
-aggregate report destination, {{reports}}). The policy record MUST contain at most 64 prefixes;
-verifiers MUST ignore prefixes beyond the 64th. `u`, `t`, and `rua`
-apply to both deployment modes.
+each meeting {{canon}}); `u` (reputation unit, default 64; MUST be no
+shorter than every listed prefix and no longer than 64 — a value
+outside that range makes the record malformed, so the publishing
+operator sees the error rather than having it silently adjusted); `t`
+(OPTIONAL flags, {{testing}}); `rua` (OPTIONAL aggregate report
+destination, {{reports}}). Publishers MUST include at most 64 prefixes;
+verifiers process only the first 64. The `p` enumeration authorizes
+prefixes in both deployment modes, and `u`, `t`, and `rua` apply to
+both modes. A policy with no `p` value authorizes no Mode-2 token.
 
 ## Record Tag Parsing {#tagparse}
 
 Tag names are case-sensitive lowercase. The `v` tag MUST be first. A
 record containing the same tag name more than once MUST be treated as
-malformed. Whitespace MUST NOT appear within a tag value. Multiple
+malformed.
+
+A record MUST consist entirely of printable US-ASCII, octets 0x20
+through 0x7E, together with HTAB (0x09); a record containing any other
+octet is malformed. This excludes CR, LF, NUL, DEL and every other C0
+control. Whitespace therefore means SP and HTAB and nothing else.
+Leading and trailing whitespace around a tag name or value is stripped
+before the value is interpreted; whitespace remaining inside a tag
+value after stripping makes the record malformed.
+
+Both rules are stated as octet ranges deliberately. "Whitespace" is
+where independent implementations diverge without noticing — some
+runtimes treat U+00A0 or U+3000 as whitespace, some treat VT as
+whitespace and some do not — and a record that one verifier rejects
+while another trims it into an apparently safe value is a parser
+differential in a security decision. Restricting the record to
+printable ASCII costs nothing, because every value this document
+defines is ASCII by construction, and HTAB is admitted only because a
+hand-edited zone file legitimately carries one between tags. Multiple
 character-strings within a single TXT RR are concatenated in order
 without separators. If more than one TXT RR at a QNAME begins with
 `v=SWORN1`, the record set is in error and MUST yield `permerror`;
@@ -218,10 +238,14 @@ later registered by another party constitutes takeover of the
 operator's attestation identity. Transparency logs SHOULD record the
 resolved CNAME chain so monitors can detect target changes.
 
-DNSSEC {{RFC9364}} is RECOMMENDED but NOT REQUIRED; see {{security}}
-for why key substitution without prefix access is non-exploitable. An
-unsigned link in a CNAME chain weakens that root-of-trust argument for
-the delegated portion.
+DNSSEC {{RFC9364}} is RECOMMENDED. Prefix authorization prevents a
+stolen signing key by itself from attesting unrelated space, but it
+does not protect an unsigned DNS lookup: an active DNS attacker that
+can replace both the policy and key records can impersonate an
+operator. Verifiers capable of obtaining a validated DNSSEC status
+SHOULD expose it to local policy, and security-sensitive deployments
+SHOULD require validated answers. Every link in a delegated CNAME
+chain is part of this DNS trust path.
 
 TODO: full ABNF; record size guidance table.
 
@@ -381,6 +405,11 @@ encoding ({{RFC8949}} Section 4.2.1):
 | 5 | exp | REQUIRED | expiry; MUST be > iat and <= iat + 86400 |
 | 6 | role | REQUIRED | text string, one of "mta" / "esp-tenant" / "forwarder" |
 
+Signers MUST emit the operator domain in lowercase A-label form.
+Verifiers accept ASCII letter case for interoperability but MUST
+lowercase the domain before constructing DNS names, reporting a result,
+or keying reputation. Domain-name comparison is case-insensitive.
+
 CDDL:
 
 ~~~
@@ -420,37 +449,62 @@ attested prefix ({{security}}).
 
 ## Verification {#verification}
 
-Stateless. All of the following checks MUST pass for `sworn=pass`:
+Stateless. All of the following checks MUST pass for `sworn=pass`
+(subject to the `t=y` reporting override in {{testing}}):
 
 1. Parse: tagged COSE_Sign1; protected-header requirements ({{token}});
    payload key requirements and CDDL; prefix canonicality and range,
    and source-address eligibility ({{canon}}).
-2. Validity bounds on the raw payload values: `exp > iat` and
-   `exp - iat <= 86400`.
-3. Obtain the operator key from the `<kid>._sworn.<operator domain>`
-   record. Verifiers MUST reject a non-conforming `kid` or operator
-   domain before performing any DNS query.
-4. Verify the signature with the record key and the record's `k=`
-   algorithm.
-5. Validity window: current time within `[iat - 300s, exp + 300s]`.
+2. All remaining local checks: validity bounds on the raw payload
+   values (`exp > iat` and `exp - iat <= 86400`); current time within
+   `[iat - 300s, exp + 300s]`; unit bounds; and source membership.
    Verifiers MUST NOT apply a skew tolerance greater than 300 seconds.
    The cap in check 2 is evaluated on the unmodified `iat` and `exp`.
-6. Unit bounds: `unit >= prefix length` and `unit <= 64` (absent = 64).
-7. Source membership: the connecting source address is within the
-   attested prefix after the {{canon}} eligibility checks.
+   `unit` MUST be at least the token prefix length and at most 64
+   (absent = 64). The connecting source MUST be within the attested
+   prefix after the {{canon}} eligibility checks.
+3. Obtain the policy record from
+   `_prefixes._sworn.<operator domain>`. The token prefix MUST be the
+   same as or a subnet of at least one of the first 64 policy prefixes,
+   and the token `unit` MUST equal the policy `u` value (including its
+   default). More precisely, policy prefix Q authorizes token prefix P
+   when `length(P) >= length(Q)` and Q contains P's canonical network
+   address. No policy record yields `none`; a malformed policy,
+   unauthorized prefix, or unit mismatch yields `permerror`.
 
-Verifiers MAY evaluate the local checks — parsing, validity bounds,
-the validity window, unit bounds, and source membership — before
-fetching the key in check 3, so that garbage tokens cannot generate
-receiver-paid DNS load. When such a local check fails, the verifier
-MUST report that failure and MUST NOT perform the key fetch. The
-pass/fail outcome does not depend on ordering; reason codes are
-advisory diagnostics, not a canonical ordering.
+   Because `u` is published once per operator, every token an operator
+   issues shares one unit. An operator using `role=esp-tenant`, whose
+   unit MUST equal its token prefix length ({{token}}), therefore
+   issues tenant tokens at a single prefix length. This is deliberate:
+   the aggregation an operator asks receivers to use is a property of
+   the operator, published in DNS where it can be audited, rather than
+   something each token restates. Operators needing several tenant
+   granularities use a separate operator domain per granularity.
+4. Obtain the operator key from the `<kid>._sworn.<operator domain>`
+   record. An unimplemented `k=` yields `none` as specified in
+   {{tagparse}}.
+5. Verify the signature with the record key and the record's `k=`
+   algorithm.
 
-Replay of a captured token is only possible from within the same
-attested prefix, which is the same reputation unit; receivers
-therefore need no anti-replay state (but see `esp-tenant`,
-{{security}}).
+Checks 1 and 2 MUST complete before either DNS lookup. If a local check
+fails, the verifier MUST report that failure and MUST NOT fetch the
+policy or key. After a successful policy lookup, check 3 MUST complete
+before the key lookup, so a syntactically valid but unauthorized token
+cannot trigger a key query. Verifiers MUST reject a non-conforming
+`kid` or operator domain before any DNS query. The outcome does not
+otherwise depend on ordering; reason codes are advisory diagnostics,
+not a canonical ordering.
+
+Replay of a captured token is limited to connections originating
+inside the signed prefix. It is not necessarily limited to one
+declared reputation unit: a finer `unit` can differ across source
+addresses inside a broader signed prefix. Receivers need no mandatory
+anti-replay state because every successful replay remains attributable
+to the same claimant domain and an observed source inside the signed
+prefix. Reputation consequences remain subject to the prefix-control
+rules in {{semantics}}. Deployments that attach privileges beyond
+reputation MAY additionally maintain a bounded replay cache; `role`
+alone is not evidence of a distinct sender.
 
 ## Result Reporting {#reporting}
 
@@ -462,19 +516,29 @@ as a quoted-string:
 ~~~
 Authentication-Results: mx.example;
     sworn=pass policy.op=mailer.example.com
-    policy.unit="2001:db8:f00::/64" policy.mode=token
+    policy.unit="2001:db8:f00::/64"
+    policy.observed="2001:db8:f00::/64" policy.mode=token
 ~~~
 
 The `policy.mode` property is `token` for Mode 2 and `dns` for Mode 1.
+
+`policy.unit` is the aggregation the operator asked for: a claim.
+`policy.observed` is the observed unit ({{semantics}}) — the source
+address masked to /64, which is what this connection actually
+corroborated. Verifiers MUST emit both on every `pass` and on every
+`t=y` observe-only result; consumers that stake reputation MUST use
+`policy.observed` unless they hold independent evidence of control
+over the whole attested prefix. The two are equal whenever the
+operator declares the default `u=64`.
 
 Result values and their causes:
 
 | Result | Cause |
 |--------|-------|
-| none | no `v=SWORN1` record, NXDOMAIN, unimplemented `k=`, or (Mode 1) no confirming operator found |
+| none | no `v=SWORN1` policy/key record, NXDOMAIN, unimplemented `k=`, or (Mode 1) no confirming operator found |
 | pass | all verification checks passed |
 | fail | signature failure, off-prefix, expired, or not-yet-valid |
-| permerror | malformed token/record, bad headers, non-canonical or out-of-range prefix, ineligible source, bad unit, bad validity (`exp <= iat`), lifetime over cap, bad role, non-conforming kid or operator domain, missing REQUIRED key, duplicate key, `crit` present, or untagged COSE |
+| permerror | malformed token/record, unauthorized token prefix, policy/token unit mismatch, bad headers, non-canonical or out-of-range prefix, ineligible source, bad unit, bad validity (`exp <= iat`), lifetime over cap, bad role, non-conforming kid or operator domain, missing REQUIRED key, duplicate key, `crit` present, or untagged COSE |
 | temperror | DNS timeout or SERVFAIL, or (Mode 1) discovery query budget exhausted |
 
 All `fail` and `permerror` causes identify no accountable party
@@ -486,10 +550,40 @@ spoofable and MUST NOT survive the trust boundary unexamined.
 # Receiver Reputation Semantics {#semantics}
 
 On `sworn=pass`, receivers SHOULD key reputation on the tuple
-(operator domain, containing unit prefix). Abusive traffic from an
-attested prefix SHOULD affect the reputation of the entire attested
-prefix and MAY affect the operator domain across all its attested
-prefixes.
+(operator domain, observed unit), where the observed unit is defined
+below. Source membership proves
+that the current connection originated somewhere inside the signed
+prefix; it does not prove that the claimant exclusively controls every
+address in that prefix. A shared-hosting tenant can therefore publish
+a policy covering its provider's aggregate, but that self-claim MUST
+NOT cause reputation consequences for the provider's domain, another
+operator domain, an unobserved unit, or the aggregate as an IP-only
+identity.
+
+Absent independent evidence of control over the whole signed prefix
+(for example, a reverse-DNS delegation rooted at the claimed boundary,
+a provider authorization, or an applicable authenticated routing
+attestation), receivers MUST scope positive and negative reputation to
+the claimant domain and the connecting source's /64, or a finer
+receiver-chosen prefix. This is the *observed unit*: the connecting
+source address masked to /64. It is derived from the connection, never
+from the token or the policy record, so a claimant's broader `u` value
+cannot widen it. Because `u` is itself capped at 64 ({{records}}), the
+observed unit is always the source /64.
+
+Verifiers MUST make the observed unit available to their consumers
+alongside the declared unit, and MUST report it as `policy.observed`
+in Authentication-Results ({{reporting}}). A consumer reading only the
+Authentication-Results field would otherwise have no way to tell the
+claim apart from the corroborated boundary, which would leave this
+requirement unenforceable in the one artifact that crosses the trust
+boundary.
+
+With independent control evidence, receivers
+MAY instead use the declared unit up to the verified control boundary;
+abusive traffic MAY then affect the claimant domain across its
+attested prefixes and MAY be rolled up to that boundary. A signed
+broad claim alone is never that evidence.
 
 Receivers MUST NOT treat a `sworn=fail`, `sworn=temperror`, or
 `sworn=permerror` result as worse than `sworn=none` for reputation or
@@ -505,7 +599,10 @@ keying. Overlapping attestations under different operator domains are
 legitimate in provider/tenant arrangements but SHOULD be surfaced by
 transparency-log monitors. The declared unit is advisory to receivers,
 which key reputation at whatever granularity they choose within the
-attested prefix.
+attested prefix, subject to the observed-unit and independently verified
+control boundary above. Cross-domain prefix history is an abuse-reset
+signal for investigation, not authority to transfer reputation from
+one claimant domain to another.
 
 `role` is a self-assertion carrying no cryptographic weight beyond the
 operator's accountability for the prefix. Receivers MUST NOT grant
@@ -514,25 +611,30 @@ more favourable treatment on the basis of `role` alone.
 # Testing Mode {#testing}
 
 The `t=` policy tag is a colon-separated list of flags; `y` means
-testing. Unknown flags MUST be ignored. Under `t=y`, receivers process
-verification identically but MUST report the outcome as
-`sworn=none policy.testing=y`, carrying the would-be result in a
-`policy.wouldbe=` property, and MUST NOT apply liability-staking
-reputation semantics ({{semantics}}) — neither credit nor blame
-accrues. Reporting the result as `none` keeps consumers that key on
-`sworn=pass` from mistaking a testing deployment for a committed one.
+testing. Unknown flags MUST be ignored. When every verification check
+would otherwise pass under `t=y`, receivers MUST instead report
+`sworn=none policy.testing=y policy.wouldbe=pass` and MUST NOT apply
+liability-staking reputation semantics ({{semantics}}) — neither
+credit nor blame accrues. A token that fails another check is reported
+normally and MUST NOT carry operator properties, because a failed
+signature identifies no accountable party. Reporting a successful
+test as `none` keeps consumers that key on `sworn=pass` from mistaking
+an observe-only deployment for a committed one.
 
 This provides an observe-only on-ramp: operators validate their
 records, tokens, and coverage in production traffic before accepting
-consequences. Logs SHOULD record an operator's first-seen time;
-receivers MAY disregard `t=y` for an operator first observed more than
-90 days prior, to bound indefinite hiding behind testing mode.
+consequences. Receivers MAY stop processing stale testing deployments
+as attestations, but MUST NOT convert `t=y` into `sworn=pass` or apply
+reputation consequences merely because testing has lasted a long time.
 
 # Aggregate Feedback Reports {#reports}
 
 The `rua=mailto:<address>` policy tag requests aggregate feedback, in
-the spirit of DMARC {{RFC7489}} aggregate reports. Only the `mailto:`
-scheme is defined. Before sending any report, a receiver MUST confirm
+the spirit of DMARC {{RFC7489}} aggregate reports. Only an ASCII
+`mailto:<dot-atom>@<A-label-domain>` value is defined; quoted local
+parts, whitespace, control characters, URI parameters, commas, and
+additional recipients are invalid. Before sending any report, a
+receiver MUST confirm
 consent when the rua mailbox domain is not the operator domain or a
 subdomain of it: query
 `<operator-domain>._report._sworn.<rua-domain>` for a TXT record
@@ -559,31 +661,39 @@ the impact of BGP origin hijacks against attested space.
 # Cryptographic Agility and Post-Quantum Migration {#pq}
 
 The `k=` registry ({{iana}}) is the agility mechanism. Initial entry:
-`ed25519` (REQUIRED to implement). Planned entries: `fn-dsa-512`
-(Falcon; compact PQ signatures) and composite `ed25519+ml-dsa-44` for
-transition-period dual signing. Registering a post-quantum algorithm
-whose public key does not fit comfortably in a TXT record will require
-a companion key-distribution mechanism; that mechanism is deliberately
-out of scope for this revision and will be defined alongside the first
-such registration, so that its key serialization and integrity checks
-are pinned to a concrete algorithm rather than left open.
+`ed25519` (REQUIRED to implement). ML-DSA is standardized in NIST FIPS
+204 and is the current basis for a future transition entry. FN-DSA
+(Falcon) remains under NIST standardization as FIPS 206 at the time of
+this revision and MUST NOT be registered here until its final encoding
+and validation requirements are stable.
+
+A transition-period composite such as `ed25519+ml-dsa-44` is a design
+candidate, not an entry defined by this revision. Any future composite
+definition MUST bind both signatures to the same protected headers and
+payload, and verification MUST require both components; falling back to
+whichever component verifies would enable downgrade. ML-DSA public keys
+do not fit comfortably in the current DNS TXT key record and composite
+tokens require an explicit COSE encoding, so the first post-quantum
+registration will also define a companion key-distribution mechanism,
+size limits, test vectors, and downgrade behavior. No implementation
+should infer those details from this draft.
 
 SwornMail carries no confidential payloads; the quantum threat is live
-forgery only, not retrospective decryption, and forged tokens still
-fail source-prefix verification. Transparency logs are Merkle
-structures over SHA-256, which remain adequate under Grover-bounded
-adversaries.
+forgery only, not retrospective decryption. Even a forged token still
+requires a covering operator policy and a connection from the
+authorized prefix. Transparency logs are Merkle structures over
+SHA-256, which remain adequate under Grover-bounded adversaries.
 
 # Security Considerations {#security}
 
 Summarized from the project threat model (published alongside this
 draft):
 
-- Key theft alone is non-exploitable off-prefix: verification binds
-  the token to the connecting address's membership in the attested
-  prefix (goal 4), which the minimum prefix length and global-unicast
-  bound ({{canon}}) make meaningful — there is no "attest everything"
-  prefix.
+- Key theft alone is non-exploitable outside the operator policy:
+  verification requires both a covering policy prefix and source
+  membership in the signed prefix (goal 4). A stolen key can forge
+  tokens only for subnets the separately published policy already
+  authorizes.
 - A failed result attributes to no one ({{semantics}}), so an attacker
   replaying a captured token off-prefix produces `sworn=fail` that
   cannot be charged against the victim operator, and cannot be treated
@@ -600,19 +710,32 @@ draft):
   reputation unit aligned with the accountable prefix.
 - Attestation squatting earns no benefit: reputation services MUST
   bind reputation only to attestations corroborated by verified
-  traffic from within the attested prefix; logs SHOULD require or
-  record proof of prefix control and distinguish uncorroborated
-  claims.
+  traffic from the source /64 (or finer) inside the attested prefix. A connection
+  from one shared-hosting address does not prove control of its
+  provider's aggregate; absent independent control evidence, receivers
+  MUST NOT honor a broader claimant-declared unit, spread reputation
+  to another /64 or another domain. The observed unit ({{semantics}})
+  makes this checkable rather than advisory: it is computed from the
+  connection and reported as `policy.observed`, so a consumer never has
+  to reconstruct it from a value the claimant chose.
+  Logs SHOULD require or record proof of prefix control and distinguish
+  uncorroborated claims.
 - Mode-1 delegation: enumerating a prefix accepts accountability for
   delegated sub-allocations ({{mode1}}); operators that delegate
   reverse DNS SHOULD enumerate only what they operate.
 - Disposable-domain cycles are visible in logs as cross-domain
-  re-attestation; reputation services SHOULD propagate prefix history
-  across operator changes.
+  re-attestation. Reputation services SHOULD use that history as a
+  reset-evasion signal, but MUST NOT automatically transfer reputation
+  between claimant domains without independent evidence that both
+  controlled the relevant prefix boundary; automatic transfer would
+  let a cheap domain poison shared-provider space.
 - EHLO keyword stripping downgrades to the fail-open baseline;
   post-STARTTLS re-issue ({{xsworn}}) keeps attestation inside TLS.
-- `_sworn` record spoofing without DNSSEC enables at most denial of
-  verification (fail-to-neutral), not impersonation.
+- `_sworn` record spoofing without DNSSEC can impersonate an operator
+  if an active attacker replaces both the policy and key answers.
+  DNSSEC validation or an equivalently authenticated DNS channel is
+  required to exclude that attacker; without it, SwornMail has the
+  same DNS-rooted residual risk as DKIM.
 - Verifiers are DNS query generators. The `kid`/domain syntax checks
   before any query ({{token}}), cheap-checks-first ordering
   ({{verification}}), the 10-query Mode-1 budget ({{mode1-discovery}}),
@@ -624,9 +747,9 @@ draft):
 
 Attestation records and logs disclose prefix-to-operator mappings.
 Comparable information is generally already public via SPF records and
-rDNS. Operators SHOULD publish enumeration records at /48 coarseness
-or omit them where topology disclosure is a concern. Aggregate reports
-({{reports}}) carry counts only.
+rDNS. Operators SHOULD publish authorization at /48 coarseness where
+that is sufficient; omitting a prefix disables attestation for it in
+both modes. Aggregate reports ({{reports}}) carry counts only.
 
 # IANA Considerations {#iana}
 
@@ -634,8 +757,8 @@ This document requests:
 
 1. Registration of the `sworn` method in the Email Authentication
    Methods registry ({{RFC8601}}), with property names `policy.op`,
-   `policy.unit`, `policy.mode`, `policy.testing`, and
-   `policy.wouldbe`, and the result values of {{reporting}}. Reason
+   `policy.unit`, `policy.observed`, `policy.mode`, `policy.testing`,
+   and `policy.wouldbe`, and the result values of {{reporting}}. Reason
    tokens are advisory diagnostics and are not registered.
 2. Registration of the SMTP service extension keyword `SWORN` and the
    `SWORN` command ({{RFC5321}}).
