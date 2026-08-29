@@ -36,7 +36,6 @@ normative:
   RFC8949:
   RFC9052:
 informative:
-  RFC3463:
   RFC5518:
   RFC6698:
   RFC6838:
@@ -159,7 +158,8 @@ Published at a QNAME that carries the selector, so each fetch returns
 exactly one key and rotation never bloats a response:
 
 ~~~
-2026a._sworn.mailer.example.com. IN TXT "v=SWORN1; k=ed25519; pk=<base64>"
+2026a._sworn.mailer.example.com. IN TXT
+    "v=SWORN1; k=ed25519; pk=<base64>"
 ~~~
 
 Tags: `v` (version, REQUIRED, "SWORN1", MUST be first); `k` (algorithm
