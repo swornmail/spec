@@ -98,6 +98,14 @@ rejects (`small_order_r_component`). Cases that need a key other than the
 file's carry it in a new optional `public_key_hex` field. Every earlier case
 is byte-identical.
 
+**A size bound on tokens.** The `-01` draft requires decoders to bound input
+before parsing but names no number; the revision being prepared for
+submission sets it. A token longer than 3072 octets is malformed and is
+rejected before any CBOR decoding; the longest SWORN command line (4096
+octets) carries at most 3066 octets of token. Two cases are appended, both validly signed and differing only
+in length: `token_at_size_cap` (3072 octets, a pass) and
+`token_over_size_cap` (3073, malformed).
+
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Build the submission artifact (v3 XML, IETF-stream numbering):
