@@ -66,6 +66,20 @@ ES256 label over an Ed25519 signature); every earlier case is byte-identical.
 Signers keep emitting -8 for now: verifiers built before this change,
 including Rust crate `0.2.0`, reject -19.
 
+**Strict Ed25519 verification.** The revision being submitted requires
+verifiers to treat a small-order public key or signature `R` as a signature
+failure. Under the identity key, `R` = identity and `S` = 0 verify for every
+message with the cofactorless equation, so a domain that published such a
+key would in effect have published its private key. The Go reference
+accepted that forgery; the Rust verifier never did. Three cases were
+appended: that forgery (`small_order_public_key`), and one case for each
+check on its own. Under the identity key with an ordinary `R` and `S` = 1,
+only the key check rejects (`small_order_public_key_ordinary_r`). For a key
+holder signing with `R` = identity under the real key, only the `R` check
+rejects (`small_order_r_component`). Cases that need a key other than the
+file's carry it in a new optional `public_key_hex` field. Every earlier case
+is byte-identical.
+
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Build the submission artifact (v3 XML, IETF-stream numbering):
