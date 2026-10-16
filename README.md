@@ -106,6 +106,17 @@ octets) carries at most 3066 octets of token. Two cases are appended, both valid
 in length: `token_at_size_cap` (3072 octets, a pass) and
 `token_over_size_cap` (3073, malformed).
 
+**Payload value types.** The draft's CDDL types the defined payload keys
+`tstr`, `bstr` and `uint`. A tagged value is none of these, and a bignum is
+CDDL's `biguint`, a different type, so either is malformed; only keys the
+draft leaves as `any` may be tagged. `uint` runs to 2^64-1, and a time past
+2^63 is far in the future rather than malformed. Six cases are appended:
+`operator_tagged`, `iat_tagged_epoch`, `iat_bignum` (malformed),
+`unknown_key_tagged_ignored` (a pass), and `iat_beyond_int64` and
+`validity_straddles_int64` (not yet valid). Before this, the Go reference
+accepted the first three and called the last two malformed, and the Rust
+verifier accepted the bignum. Every earlier case is byte-identical.
+
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Build the submission artifact (v3 XML, IETF-stream numbering):
