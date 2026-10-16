@@ -56,6 +56,16 @@ publishing a record in one of those shapes must fix it; `sworn genrecord`
 will not emit one. The Rust crate ships the tightened rules from `0.2.0`;
 `0.1.0` predates them.
 
+**Token acceptance widened within `-01`: the COSE `alg` for Ed25519.** The
+draft says a token's `alg` must correspond to the key record's `k=`. IANA has
+since deprecated the polymorphic `EdDSA` identifier (-8) that tokens carry,
+in favour of the fully-specified `Ed25519` (-19, RFC 9864). Both name the
+algorithm `k=ed25519` fixes, so verifiers accept either. Three cases were
+appended to `test-vectors/v1.json` (a -19 pass, a tampered -19 token, and an
+ES256 label over an Ed25519 signature); every earlier case is byte-identical.
+Signers keep emitting -8 for now: verifiers built before this change,
+including Rust crate `0.2.0`, reject -19.
+
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Build the submission artifact (v3 XML, IETF-stream numbering):
