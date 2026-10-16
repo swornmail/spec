@@ -41,7 +41,7 @@ Both remain in git history.
 **Record acceptance tightened within `-01`.** Token bytes are unchanged and
 `test-vectors/v1.json` still reproduces byte-identically for every case that
 existed before it, so the wire format is unaffected and no published token
-is invalidated. Four classes of *record* that earlier `-01` implementations
+is invalidated. These classes of *record* that earlier `-01` implementations
 accepted are now malformed:
 
 - a policy `u=` coarser than any prefix in the same record's `p=` — a
@@ -56,6 +56,13 @@ accepted are now malformed:
   non-canonical point encodings RFC 8032 rejects (y of p or more, and x = 0
   with the sign bit set); two more record cases pin that, so an
   implementation that rejects them shows up as a divergence
+- numbers that aren't plain digits, now that the draft has an ABNF: `u=`
+  and prefix lengths are digits only, with no sign and no leading zero
+  (`u=+64`, `u=064` and `p=…/048` were each read differently by at least
+  one parser); a tag with an empty name (`=x`, which Rust rejected and Go and
+  Lua ignored); and an embedded IPv4 address anywhere but the end of an
+  IPv6 address. Eight record cases are appended, two of them pinning
+  spellings that stay valid (uppercase hex, an uncompressed address)
 
 These are corrections, not features: each one closed a way for two
 conforming verifiers to read the same record differently. An operator
