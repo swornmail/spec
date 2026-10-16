@@ -41,7 +41,7 @@ Both remain in git history.
 **Record acceptance tightened within `-01`.** Token bytes are unchanged and
 `test-vectors/v1.json` still reproduces byte-identically for every case that
 existed before it, so the wire format is unaffected and no published token
-is invalidated. Three classes of *record* that earlier `-01` implementations
+is invalidated. Four classes of *record* that earlier `-01` implementations
 accepted are now malformed:
 
 - a policy `u=` coarser than any prefix in the same record's `p=` — a
@@ -49,6 +49,13 @@ accepted are now malformed:
 - `rua=` values outside a conservative ASCII `mailto:<dot-atom>@<domain>` —
   no quoted local parts, URI parameters, or additional recipients
 - any octet outside printable US-ASCII (0x20–0x7E) anywhere in a record
+- a key record whose `pk=` is 32 octets but not an Ed25519 curve point. The
+  Go reference used to accept it and fail every signature (`fail`), while
+  Rust rejected the record (`permerror`). Both now reject it, and record case
+  `key_not_a_curve_point` is appended. Both also accept the two
+  non-canonical point encodings RFC 8032 rejects (y of p or more, and x = 0
+  with the sign bit set); two more record cases pin that, so an
+  implementation that rejects them shows up as a divergence
 
 These are corrections, not features: each one closed a way for two
 conforming verifiers to read the same record differently. An operator
