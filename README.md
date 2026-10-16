@@ -63,12 +63,16 @@ accepted are now malformed:
   Lua ignored); and an embedded IPv4 address anywhere but the end of an
   IPv6 address. Eight record cases are appended, two of them pinning
   spellings that stay valid (uppercase hex, an uncompressed address)
+- a `pk=` that isn't canonical base64: the unused bits of its last
+  character must be zero (RFC 4648, Section 3.5). Go's lenient decoder
+  dropped them and accepted the record; Rust rejected it. Record case
+  `key_pk_noncanonical_base64` is appended
 
 These are corrections, not features: each one closed a way for two
 conforming verifiers to read the same record differently. An operator
 publishing a record in one of those shapes must fix it; `sworn genrecord`
-will not emit one. The Rust crate ships the tightened rules from `0.2.0`;
-`0.1.0` predates them.
+will not emit one. The Rust crate ships the earlier tightening from `0.2.0`, and the
+number-spelling rules from `0.2.2`; earlier versions accept those spellings.
 
 **Token acceptance widened within `-01`: the COSE `alg` for Ed25519.** The
 draft says a token's `alg` must correspond to the key record's `k=`. IANA has
