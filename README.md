@@ -117,6 +117,26 @@ draft leaves as `any` may be tagged. `uint` runs to 2^64-1, and a time past
 accepted the first three and called the last two malformed, and the Rust
 verifier accepted the bignum. Every earlier case is byte-identical.
 
+**Payload and header major types.** The same CDDL, held to the CBOR major
+type rather than to what a decoder makes of it. The payload is a map, not a
+tagged map. A key is an `int`: a tagged integer or a bignum is not one and
+cannot stand in for a defined key, while every CBOR integer is one, however
+wide, and is ignored when it names no defined key. `null`, a simple value and
+an array of integers are not a `uint` or a `bstr`. A COSE header label is
+`int / tstr` (RFC 9052, Section 3), and `alg`, content type and `kid` are an
+int, a tstr and a bstr. Twelve cases are appended: `unit_null`,
+`unit_simple_value`, `iat_null`, `prefix_integer_array`,
+`payload_self_described`, `operator_key_self_described`
+and `operator_key_bignum` (malformed); `kid_label_bignum`,
+`kid_self_described` and `alg_negative_bignum` (rejected, under any of the
+reasons a verifier may name first); and `unknown_key_beyond_int64_ignored` and
+`unknown_key_most_negative_ignored` (a pass). Before this, the Go reference
+read `null` as the default unit, a simple value as its number and the array
+as a prefix, dropped a self-described tag wherever it met one, and rejected
+an unknown key past 2^63; the Rust verifier read a bignum as the integer it
+encodes, as a payload key, a header label or `alg`. Every earlier case is
+byte-identical.
+
 Build the draft: `gem install kramdown-rfc && kdrfc draft-kafedzhy-swornmail-01.md`
 
 Build the submission artifact (v3 XML, IETF-stream numbering):
